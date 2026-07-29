@@ -135,12 +135,17 @@ export default function App() {
     const result = fromEvents || (activeResult?.decision ? { event: 'decision', content: activeResult.decision } : null);
     if (!result) return null;
     const text = result.content || '';
-    // Rating
+    // Rating - scan from end of text for the final recommendation
+    const tail = text.slice(-800); // recommendation usually at the end
     let rating = 'neutral';
-    if (/Sell|卖出|清仓/i.test(text)) rating = 'sell';
-    else if (/Overweight|Buy|买入|增持|加仓/i.test(text)) rating = 'buy';
-    else if (/Underweight|减持|减仓/i.test(text)) rating = 'underweight';
-    else if (/Hold|持有|观望/i.test(text)) rating = 'hold';
+    if (/(?:建议|推荐|评级|rating|decision|proposal).*(?:Sell|卖出|清仓|看空)/i.test(tail)) rating = 'sell';
+    else if (/(?:建议|推荐|评级|rating|decision|proposal).*(?:Overweight|Buy|买入|增持|看多)/i.test(tail)) rating = 'buy';
+    else if (/(?:建议|推荐|评级|rating|decision|proposal).*(?:Underweight|减持|减仓)/i.test(tail)) rating = 'underweight';
+    else if (/(?:建议|推荐|评级|rating|decision|proposal).*(?:Hold|持有|观望)/i.test(tail)) rating = 'hold';
+    else if (/Sell|卖出/i.test(tail)) rating = 'sell';
+    else if (/Buy|买入|增持/i.test(tail)) rating = 'buy';
+    else if (/Underweight|减持/i.test(tail)) rating = 'underweight';
+    else if (/Hold|持有|观望/i.test(tail)) rating = 'hold';
     // Clean leaked JSON/code blocks
     let clean = text
       .replace(/```[\s\S]*?```/g, '')
