@@ -40,8 +40,10 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
+from tradingagents.dataflows.eastmoney import get_sentiment as get_eastmoney_sentiment
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
+from tradingagents.dataflows.symbol_utils import is_a_share
 
 
 def _seven_days_back(trade_date: str) -> str:
@@ -64,12 +66,32 @@ def create_sentiment_analyst(llm):
         start_date = _seven_days_back(end_date)
         instrument_context = get_instrument_context_from_state(state)
 
-        # Pre-fetch all three sources. Each fetcher degrades gracefully and
+        # Pre-fetch all sources. Each fetcher degrades gracefully and
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
+        import logging
+        _log = logging.getLogger(__name__)
+        _log.info("Sentiment Analyst: pre-fetching news for %s", ticker)
         news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
+        _log.info("Sentiment Analyst: news fetched (%d chars)", len(news_block))
+
+        # 意图分流：A 股使用东财资金流向替代 Reddit/StockTwits（美股社交平台不覆盖 A 股）
+        if is_a_share(ticker):
+            _log.info("Sentiment Analyst: A-share detected, fetching fund flow")
+            fund_flow_block = get_eastmoney_sentiment(ticker, end_date)
+            _log.info("Sentiment Analyst: fund flow fetched (%d chars)", len(fund_flow_block))
+            stocktwits_block = f"[A股资金流向 — 替代 StockTwits]\n{fund_flow_block}"
+            reddit_block = (
+                "[A股情绪] Reddit/StockTwits 为美股社交平台，不覆盖中国 A 股。"
+                "A 股情绪分析请参考上方「A股资金流向」数据——主力资金持续流入=机构看多，"
+                "主力流出+散户接盘=看空信号。"
+            )
+        else:
+            stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
+            reddit_block = fetch_reddit_posts(ticker)
+
+        a_share = is_a_share(ticker)
+        _log.info("Sentiment Analyst: invoking LLM...")
 
         system_message = _build_system_message(
             ticker=ticker,
@@ -78,6 +100,7 @@ def create_sentiment_analyst(llm):
             news_block=news_block,
             stocktwits_block=stocktwits_block,
             reddit_block=reddit_block,
+            a_share=a_share,
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -131,9 +154,48 @@ def _build_system_message(
     news_block: str,
     stocktwits_block: str,
     reddit_block: str,
+    a_share: bool = False,
 ) -> str:
-    """Assemble the sentiment-analyst system message with structured data blocks."""
-    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
+    """Assemble the sentiment-analyst system message with structured data blocks.
+
+    When ``a_share`` is True, data-source labels are switched from US-market
+    names (Yahoo Finance / StockTwits / Reddit) to A-share equivalents
+    (东方财富新闻 / A股资金流向).
+    """
+    if a_share:
+        return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} (China A-share) covering the period from {start_date} to {end_date}, drawing on data sources that have already been collected for you.
+
+## Data sources (pre-fetched, in this prompt)
+
+### 东方财富个股新闻 — 过去 7 天
+机构视角，事实驱动，信号变化较慢。
+
+<start_of_news>
+{news_block}
+<end_of_news>
+
+### A股资金流向 — 主力/超大单/大单/中单/小单 逐日净流向
+中国市场核心情绪指标。主力（超大单+大单）资金持续净流入 = 机构看多信号；
+主力持续净流出 + 小单净流入 = 散户接盘、机构出货的看空信号。
+
+<start_of_stocktwits>
+{stocktwits_block}
+<end_of_stocktwits>
+
+### 补充说明
+{reddit_block}
+
+## 分析要点
+
+1. **资金流向是最重要的 A 股情绪指标。** 主力资金动向反映机构对基本面的判断，比新闻标题更直接。
+
+2. **寻找新闻与资金流向的背离。** 如果新闻偏正面但主力持续流出，说明媒体在唱多而机构在撤退——这是最强的看空信号之一。反之亦然。
+
+3. **关注资金流向趋势而非单日值。** 连续 3-5 日的同向资金流比单日大额进出更有参考价值。
+
+4. **区分事件与观点。** 新闻标题（"茅台提价"）是事实；资金流向的解读（"主力借利好出货"）是分析。两者都是输入但权重不同。"""
+    else:
+        return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
 

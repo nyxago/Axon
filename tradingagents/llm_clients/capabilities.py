@@ -92,7 +92,7 @@ _DEFAULT = ModelCapabilities(
 
 # Exact-ID matches take precedence over pattern matches.
 _BY_ID: dict[str, ModelCapabilities] = {
-    "deepseek-chat": _DEEPSEEK_CHAT,
+    "deepseek-chat": _DEEPSEEK_THINKING,
     "deepseek-reasoner": _DEEPSEEK_THINKING,
     "deepseek-v4-flash": _DEEPSEEK_THINKING,
     "deepseek-v4-pro": _DEEPSEEK_THINKING,

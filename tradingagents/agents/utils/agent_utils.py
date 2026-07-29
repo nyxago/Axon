@@ -131,13 +131,27 @@ def build_instrument_context(
     classification are injected so agents anchor to the real company rather
     than pattern-matching the price chart to a wrong one (#814).
     """
+    from tradingagents.dataflows.symbol_utils import a_share_exchange, is_a_share
+
     is_crypto = asset_type == "crypto"
     instrument_label = "asset" if is_crypto else "instrument"
-    context = (
-        f"The {instrument_label} to analyze is `{ticker}`. "
-        "Use this exact ticker in every tool call, report, and recommendation, "
-        "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`, `-USD`)."
-    )
+
+    # 意图分流：A 股代码不应加交易后缀（.SS/.SZ 是 yfinance 风格，
+    # 对国内数据源是噪声，会导致脏数据污染下游召回）
+    if is_a_share(ticker):
+        context = (
+            f"The {instrument_label} to analyze is `{ticker}`. "
+            "This is a China A-share stock traded on "
+            f"{'Shanghai (SSE)' if a_share_exchange(ticker) == 'SSE' else 'Shenzhen (SZSE)'}. "
+            "Use this exact 6-digit code in every tool call — do NOT append any "
+            "exchange suffix like .SS or .SZ."
+        )
+    else:
+        context = (
+            f"The {instrument_label} to analyze is `{ticker}`. "
+            "Use this exact ticker in every tool call, report, and recommendation, "
+            "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`, `-USD`)."
+        )
 
     details = []
     if identity:

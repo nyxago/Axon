@@ -29,6 +29,7 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.symbol_utils import a_share_exchange, is_a_share
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
@@ -197,7 +198,7 @@ class TradingAgentsGraph:
                     # Deterministic verification snapshot (bound to the analyst
                     # LLM and required by its prompt; must be executable here or
                     # the call fails and the model reports it "unavailable").
-                    get_verified_market_snapshot,
+                    # get_verified_market_snapshot,  # 绕过 yfinance 限流,
                 ]
             ),
             "social": ToolNode(
@@ -341,7 +342,18 @@ class TradingAgentsGraph:
         hallucinating one from the price chart (#814). Both the propagate()
         path and the CLI call this so the resolved identity reaches the whole
         graph regardless of entry point.
+
+        A-share fast path: 6-digit codes skip yfinance (doesn't cover A-shares).
         """
+        # A-share: yfinance doesn't cover Chinese stocks, skip the lookup
+        if is_a_share(ticker):
+            return (
+                f"[Instrument Context]\n"
+                f"Ticker: {ticker}\n"
+                f"Exchange: {a_share_exchange(ticker)}\n"
+                f"Market: China A-Share\n"
+                f"Note: yfinance identity lookup skipped (A-share not covered)\n"
+            )
         identity = resolve_instrument_identity(ticker)
         return build_instrument_context(ticker, asset_type, identity)
 
@@ -416,7 +428,8 @@ class TradingAgentsGraph:
             )
         return write_report_tree(final_state, ticker, save_path)
 
-    def _run_graph(self, company_name, trade_date, asset_type: str = "stock"):
+    def _run_graph(self, company_name, trade_date, asset_type: str = "stock",
+                   on_chunk=None):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM and the
         # deterministically resolved instrument identity for all agents.
@@ -437,20 +450,20 @@ class TradingAgentsGraph:
             tid = thread_id(company_name, str(trade_date), self._run_signature(asset_type))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
-        if self.debug:
+        if self.debug or on_chunk is not None:
             trace = []
             last_printed = None
             for chunk in self.graph.stream(init_agent_state, **args):
-                if chunk["messages"]:
+                if chunk.get("messages"):
                     msg = chunk["messages"][-1]
-                    # Nodes after the trader don't append to messages, so the
-                    # same trailing message repeats across chunks. Print it only
-                    # when it changes (#1027); the trace/state merge is unchanged.
-                    signature = (type(msg).__name__, getattr(msg, "content", None))
-                    if signature != last_printed:
-                        msg.pretty_print()
-                        last_printed = signature
-                    trace.append(chunk)
+                    if self.debug:
+                        signature = (type(msg).__name__, getattr(msg, "content", None))
+                        if signature != last_printed:
+                            msg.pretty_print()
+                            last_printed = signature
+                if on_chunk:
+                    on_chunk(chunk)
+                trace.append(chunk)
             # Streamed chunks are per-node deltas. Merge them so the returned
             # state matches what graph.invoke() yields in the non-debug path.
             final_state = {}
@@ -463,7 +476,7 @@ class TradingAgentsGraph:
         self.curr_state = final_state
 
         # Log state to disk.
-        self._log_state(trade_date, final_state)
+        self._log_state(company_name, trade_date, final_state)
 
         # Store decision for deferred reflection on the next same-ticker run.
         self.memory_log.store_decision(
@@ -481,8 +494,128 @@ class TradingAgentsGraph:
 
         return final_state, self.process_signal(final_state["final_trade_decision"])
 
-    def _log_state(self, trade_date, final_state):
-        """Log the final state to a JSON file."""
+
+
+    def propagate_stream(self, ticker: str, date: str, asset_type: str = "stock"):
+        """流式版 propagate —— yield 结构化事件给 Web/SSE 前端。"""
+        import queue
+        import threading
+
+        self.ticker = ticker
+        q = queue.Queue()
+        seen_reports: set[str] = set()
+        final_result = {}  # 保存 _run_graph 的返回值
+
+        def on_chunk(chunk):
+            event = self._extract_event(chunk, seen_reports)
+            if event:
+                q.put(event)
+
+        def runner():
+            try:
+                result = self._run_graph(ticker, date, asset_type=asset_type, on_chunk=on_chunk)
+                final_result["state"], final_result["signal"] = result
+                # 推送最终决策
+                final_state = final_result["state"]
+                decision = final_state.get("final_trade_decision", "")
+                if decision:
+                    q.put({
+                        "event": "decision",
+                        "agent": "Portfolio Manager",
+                        "content": decision,
+                    })
+                # 推送各阶段完成的 agent_done（辩论/交易/风控/PM）
+                extra_agents = [
+                    ("Bull Researcher", "investment_debate_state"),
+                    ("Bear Researcher", "investment_debate_state"),
+                    ("Trader", "trader_investment_plan"),
+                    ("Portfolio Manager", "final_trade_decision"),
+                ]
+                for name, _ in extra_agents:
+                    if name not in seen_reports:
+                        seen_reports.add(name)
+                        q.put({"event": "agent_done", "agent": name})
+                q.put({"event": "done"})
+            except Exception as exc:
+                q.put({"event": "error", "fatal": True, "error": str(exc)})
+
+        thread = threading.Thread(target=runner, daemon=True)
+        thread.start()
+
+        while thread.is_alive() or not q.empty():
+            try:
+                yield q.get(timeout=0.5)
+            except queue.Empty:
+                yield {"event": "heartbeat"}
+
+    @staticmethod
+    def _extract_event(chunk: dict, seen_reports: set | None = None) -> dict | None:
+        """从 LangGraph chunk 提取结构化事件。返回 None 表示跳过。
+
+        LangGraph 状态是累积的——Market Analyst 写入 market_report 后，
+        后续每个 chunk 都包含该字段。``seen_reports`` 追踪已推送的报告，
+        避免重复推送和遗漏后续 Agent 的报告。
+        """
+        if seen_reports is None:
+            seen_reports = set()
+
+        messages = chunk.get("messages", [])
+        if not messages:
+            return None
+
+        msg = messages[-1]
+        content = getattr(msg, "content", "")
+
+        report_keys = [
+            ("market_report", "Market Analyst"),
+            ("sentiment_report", "Sentiment Analyst"),
+            ("news_report", "News Analyst"),
+            ("fundamentals_report", "Fundamentals Analyst"),
+        ]
+
+        for key, agent_name in report_keys:
+            if chunk.get(key) and key not in seen_reports:
+                seen_reports.add(key)
+                return {
+                    "event": "agent_done",
+                    "agent": agent_name,
+                    "report": chunk[key],
+                }
+
+        if content and isinstance(content, str) and len(content) > 20:
+            if "FINAL TRANSACTION PROPOSAL" in content:
+                return {
+                    "event": "agent_done",
+                    "agent": "Trader",
+                    "content": content,
+                }
+            if "Bull" in content[:20] or "Bear" in content[:20]:
+                speaker = "Bull" if "Bull" in content[:20] else "Bear"
+                return {
+                    "event": "chunk",
+                    "agent": f"{speaker} Researcher",
+                    "content": content,
+                }
+            if "Rating" in content or "Underweight" in content or "Overweight" in content:
+                return {
+                    "event": "decision",
+                    "agent": "Portfolio Manager",
+                    "content": content,
+                }
+            return {
+                "event": "chunk",
+                "agent": "Agent",
+                "content": content,
+            }
+
+        return None
+
+    def _log_state(self, ticker, trade_date, final_state):
+        """Log the final state to a JSON file.
+
+        ``ticker`` is passed explicitly so callers don't need to set
+        ``self.ticker`` as a side-effect before calling this method.
+        """
         self.log_states_dict[str(trade_date)] = {
             "company_of_interest": final_state["company_of_interest"],
             "trade_date": final_state["trade_date"],
@@ -515,7 +648,7 @@ class TradingAgentsGraph:
 
         # Save to file. Reject ticker values that would escape the
         # results directory when joined as a path component.
-        safe_ticker = safe_ticker_component(self.ticker)
+        safe_ticker = safe_ticker_component(ticker)
         directory = Path(self.config["results_dir"]) / safe_ticker / "TradingAgentsStrategy_logs"
         directory.mkdir(parents=True, exist_ok=True)
 

@@ -30,7 +30,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from .symbol_utils import crypto_base
+from .symbol_utils import crypto_base, is_a_share
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,12 @@ def fetch_reddit_posts(
     stay under Reddit's public per-IP rate limit; combined with the RSS-first
     path it makes 429s rare even when several analyses run back-to-back.
     """
+    # A-share fast skip: Reddit finance subs don't cover Chinese A-shares;
+    # return immediately instead of hitting rate limits for nothing.
+    if is_a_share(ticker):
+        return (
+            f"[Reddit] {ticker} 为 A 股代码，Reddit 投资板块不覆盖中国 A 股市场。"
+        )
     # Crypto reaches us as a Yahoo pair (BTC-USD); search Reddit for the base
     # ("BTC") so the query actually matches discussion instead of near-nothing.
     ticker = crypto_base(ticker) or ticker

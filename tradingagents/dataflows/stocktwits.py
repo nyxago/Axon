@@ -19,7 +19,7 @@ import json
 import logging
 from urllib.request import Request, urlopen
 
-from .symbol_utils import crypto_base
+from .symbol_utils import crypto_base, is_a_share
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,12 @@ def fetch_stocktwits_messages(ticker: str, limit: int = 30, timeout: float = 10.
     symbol has no messages, or the response shape is unexpected — the
     caller never has to special-case None or exceptions.
     """
+    # A-share fast skip: StockTwits only covers US equities; A-share codes
+    # (6-digit) return immediately rather than waiting for network timeout.
+    if is_a_share(ticker):
+        return (
+            f"[StockTwits] {ticker} 为 A 股代码，StockTwits 不覆盖中国 A 股市场。"
+        )
     url = _API.format(ticker=_stocktwits_symbol(ticker))
     req = Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
