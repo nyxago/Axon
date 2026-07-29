@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function AskPanel({ ticker, date, lang }) {
+export default function AskPanel({ ticker, date, lang, code }) {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [thread, setThread] = useState([]);
@@ -13,7 +13,7 @@ export default function AskPanel({ ticker, date, lang }) {
     try {
       const res = await fetch('/api/ask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Axon-Code': code || '' },
         body: JSON.stringify({ ticker, date, question: q }),
       });
       const data = await res.json();

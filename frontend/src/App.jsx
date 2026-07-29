@@ -267,6 +267,7 @@ export default function App() {
               ticker={ticker || activeResult?.ticker}
               date={date || activeResult?.date}
               lang={lang}
+              code={code}
             />
           </aside>
         </div>
