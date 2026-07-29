@@ -115,6 +115,11 @@ def _get_graph(code: str, ds_key: str) -> TradingAgentsGraph:
     if code not in _GRAPHS:
         mc = _get_model_config(code)
         config = DEFAULT_CONFIG.copy()
+        # Override results_dir from env var (set in event_stream before _get_graph call)
+        if os.environ.get("TRADINGAGENTS_RESULTS_DIR"):
+            config["results_dir"] = os.environ["TRADINGAGENTS_RESULTS_DIR"]
+        if os.environ.get("TRADINGAGENTS_CACHE_DIR"):
+            config["data_cache_dir"] = os.environ["TRADINGAGENTS_CACHE_DIR"]
         os.environ["DEEPSEEK_API_KEY"] = ds_key  # may be empty; user will get API error if not set
         # Inject user model preferences
         os.environ["TRADINGAGENTS_DEEP_THINK_LLM"] = mc["deep_model"]
