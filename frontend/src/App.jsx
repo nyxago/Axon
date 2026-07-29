@@ -249,14 +249,19 @@ export default function App() {
             {decision && (
               <section className="decision-section">
                 <h2 className={`decision-headline decision-${decision.rating}`}>
-                  {lang === 'zh' ? '评级：' : 'Rating: '}
-                  {decision.rating === 'buy' && (lang === 'zh' ? '买入' : 'Buy')}
-                  {decision.rating === 'sell' && (lang === 'zh' ? '卖出' : 'Sell')}
-                  {decision.rating === 'underweight' && (lang === 'zh' ? '减持' : 'Underweight')}
-                  {decision.rating === 'hold' && (lang === 'zh' ? '持有' : 'Hold')}
-                  {decision.rating === 'neutral' && (lang === 'zh' ? '中性' : 'Neutral')}
+                  {lang === 'zh' ? '分析观点：' : 'Analysis: '}
+                  {decision.rating === 'buy' && (lang === 'zh' ? '看多（仅供参考）' : 'Bullish (for reference)')}
+                  {decision.rating === 'sell' && (lang === 'zh' ? '看空（仅供参考）' : 'Bearish (for reference)')}
+                  {decision.rating === 'underweight' && (lang === 'zh' ? '偏谨慎（仅供参考）' : 'Cautious (for reference)')}
+                  {decision.rating === 'hold' && (lang === 'zh' ? '观望（仅供参考）' : 'Neutral (for reference)')}
+                  {decision.rating === 'neutral' && (lang === 'zh' ? '中性（仅供参考）' : 'Neutral (for reference)')}
                 </h2>
                 <div className="decision-body markdown-body" dangerouslySetInnerHTML={{ __html: marked.parse(decision.content || '') }} />
+                <div className="disclaimer">
+                  {lang === 'zh'
+                    ? '⚠️ 以上为 AI 多Agent 协作分析结果，不构成投资建议。投资有风险，决策需谨慎。'
+                    : '⚠️ This is AI-generated analysis, NOT investment advice. Invest at your own risk.'}
+                </div>
               </section>
             )}
             <ReportPanel reports={reports} />

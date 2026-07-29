@@ -5,8 +5,15 @@ marked.setOptions({ breaks: true, gfm: true });
 
 function renderMarkdown(text) {
   if (!text) return '';
-  const cleaned = text.replace(/FINAL TRANSACTION PROPOSAL:?\s*\*?\*?[A-Z]+\*?\*?.*$/gm, '');
-  return marked.parse(cleaned);
+  // Clean: remove the raw FINAL TRANSACTION PROPOSAL block (already shown in decision section)
+  const cleaned = text
+    .replace(/FINAL\s*TRANSACTION\s*PROPOSAL:?\s*\*?\*?[A-Z_]+\*?\*?.*?(?=\n\n|$)/gims, '')
+    .replace(/##\s*FINAL\s*TRANSACTION\s*PROPOSAL[\s\S]*$/gim, '');
+  // Ensure markdown renders: normalize headings, fix common DeepSeek formatting issues
+  const normalized = cleaned
+    .replace(/^(\w.+)$/gm, (m) => m.match(/^[#*\-\d]/) ? m : m) // don't break valid markdown
+    .replace(/\*\*([^*]+)\*\*/g, '**$1**'); // preserve bold
+  return marked.parse(normalized);
 }
 
 export default function ReportPanel({ reports }) {
@@ -36,4 +43,3 @@ export default function ReportPanel({ reports }) {
     </div>
   );
 }
-

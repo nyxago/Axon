@@ -395,6 +395,7 @@ input,button,select,textarea{
 .decision-body{font-size:13px;max-height:320px;overflow-y:auto}
 .decision-body h1,.decision-body h2{font-size:14.5px;margin:6px 0 4px}
 .decision-body p{margin:4px 0}
+.disclaimer{font-size:11px;color:var(--text-muted);margin-top:10px;padding:8px 12px;background:var(--accent-soft);border-radius:6px;line-height:1.6}
 
 /* Activity */
 .activity-feed{
