@@ -149,7 +149,8 @@ export default function App() {
     // Clean leaked JSON/code blocks
     let clean = text
       .replace(/```[\s\S]*?```/g, '')
-      .replace(/\{[\s\S]*?"items"[\s\S]*?\}/g, '')
+      .replace(/\{\s*"(?:overall_band|overall_score|confidence|narrative|recommendation|rationale|action|reasoning|rating|executive_summary|investment_thesis|entry_price|stop_loss|position_sizing|price_target|time_horizon|strategic_actions)"[\s\S]*?\}/g, '')
+      .replace(/\{\s*'(?:overall_band|overall_score|confidence|narrative|recommendation|action|reasoning|rating)[\s\S]*?\}/g, '')
       .replace(/\n{3,}/g, '\n\n');
     return { ...result, content: clean, rating };
   }, [events, activeResult, lang]);
@@ -161,8 +162,10 @@ export default function App() {
       .map((e) => {
         const agent = e.agent || '';
         const raw = e.content || e.report || e.error || '';
-        // Strip Markdown for log display: remove **, ###, | tables, etc
+        // Strip Markdown + JSON for log display
         const clean = raw
+          .replace(/```[\s\S]*?```/g, '')
+          .replace(/\{\s*"(?:overall_band|overall_score|confidence|narrative|recommendation|rationale|action|reasoning|rating|executive_summary|investment_thesis)[\s\S]*?\}/g, '')
           .replace(/\*\*(.+?)\*\*/g, '$1')
           .replace(/#{1,4}\s/g, '')
           .replace(/\|/g, ' ')

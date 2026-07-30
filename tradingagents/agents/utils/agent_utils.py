@@ -131,7 +131,46 @@ def build_instrument_context(
     classification are injected so agents anchor to the real company rather
     than pattern-matching the price chart to a wrong one (#814).
     """
-    from tradingagents.dataflows.symbol_utils import a_share_exchange, is_a_share
+    import re as _re
+
+from tradingagents.dataflows.symbol_utils import a_share_exchange, is_a_share
+
+
+def sanitize_report_text(text: str) -> str:
+    """Strip JSON blobs, code fences, and Python dict reprs from report text.
+
+    Call this on any report content before storing it in agent state or
+    writing it to disk. Shared across all agent nodes so a fix here
+    protects every output path (SSE, memory log, saved reports).
+    """
+    if not text or not isinstance(text, str):
+        return text or ""
+
+    # 1. Remove markdown code fences with their content
+    text = _re.sub(r"```(?:json|python|text|yaml)?\s*[\s\S]*?```", "", text)
+
+    # 2. Remove standalone JSON objects with known schema field names
+    text = _re.sub(
+        r'\{\s*"(?:overall_band|overall_score|confidence|narrative|recommendation|'
+        r'rationale|action|reasoning|rating|executive_summary|investment_thesis|'
+        r'entry_price|stop_loss|position_sizing|price_target|time_horizon|'
+        r'strategic_actions)"[\s\S]*?\}',
+        "",
+        text,
+    )
+
+    # 3. Remove Python dict reprs (single-quoted keys)
+    text = _re.sub(
+        r"\{\s*'(?:overall_band|overall_score|confidence|narrative|recommendation|"
+        r"action|reasoning|rating)[\s\S]*?\}",
+        "",
+        text,
+    )
+
+    # 4. Collapse 3+ consecutive newlines
+    text = _re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
 
     is_crypto = asset_type == "crypto"
     instrument_label = "asset" if is_crypto else "instrument"

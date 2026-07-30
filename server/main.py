@@ -436,6 +436,12 @@ async def ask_question(request: Request) -> JSONResponse:
                 ]})
             data = resp.json()
             answer = data["choices"][0]["message"]["content"]
+            # Sanitize: strip JSON/code leak from Q&A response
+            answer = re.sub(r"```[\s\S]*?```", "", answer)
+            answer = re.sub(
+                r'\{\s*"(?:overall_band|overall_score|confidence|narrative|recommendation|'
+                r'rationale|action|reasoning|rating)"[\s\S]*?\}', "", answer
+            )
     except Exception as exc:
         logger.warning("Q&A DeepSeek failed: %s", exc)
         answer = f"（LLM 调用失败）\n\n{hit['context'][:600]}"

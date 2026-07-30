@@ -7,6 +7,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_macro_indicators,
     get_news,
     get_prediction_markets,
+    sanitize_report_text,
 )
 
 
@@ -42,7 +43,9 @@ def create_news_analyst(llm):
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
                     " You have access to the following tools: {tool_names}."
                     " Today's date is {current_date}; treat it as 'now' for all analysis and tool-call date ranges. {instrument_context}\n"
-                    "{system_message}",
+                    "{system_message}"
+                    "\n\nOUTPUT FORMAT: Write your final report as prose with markdown. "
+                    "DO NOT output raw JSON, Python dicts, or code fences.",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
@@ -59,7 +62,7 @@ def create_news_analyst(llm):
         report = ""
 
         if len(result.tool_calls) == 0:
-            report = result.content
+            report = sanitize_report_text(result.content)
 
         return {
             "messages": [result],

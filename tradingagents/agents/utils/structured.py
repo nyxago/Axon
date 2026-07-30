@@ -85,5 +85,32 @@ def invoke_structured_or_freetext(
                 agent_name, exc,
             )
 
+    # ── Fallback: free-text generation ──────────────────────────────
+    # Inject an anti-JSON guard instruction so models that produce raw
+    # JSON when structured output isn't enforced (DeepSeek, MiniMax, etc.)
+    # don't leak code blocks into the user-visible report.
+    _FALLBACK_GUARD = (
+        "\n\nCRITICAL OUTPUT FORMAT: Write your analysis as a natural-language "
+        "report in plain prose with markdown formatting (headings, paragraphs, "
+        "tables). DO NOT output JSON, Python dicts, or code fences. If you need "
+        "to structure data, use markdown tables and bullet lists. This output "
+        "goes directly to end users — raw JSON is a critical bug."
+    )
+
+    # Inject the guard into the last user/system message before invoking.
+    if isinstance(prompt, list):
+        # Mutate a shallow copy so the original is unchanged for logging.
+        guarded = list(prompt)
+        if guarded and isinstance(guarded[-1], dict) and "content" in guarded[-1]:
+            last = dict(guarded[-1])
+            last["content"] = str(last["content"]) + _FALLBACK_GUARD
+            guarded[-1] = last
+        else:
+            guarded.append({"role": "user", "content": _FALLBACK_GUARD.strip()})
+        prompt = guarded
+    elif isinstance(prompt, str):
+        prompt = prompt + _FALLBACK_GUARD
+    # else: passthrough — can't inject into unknown types, let it fail naturally.
+
     response = plain_llm.invoke(prompt)
     return response.content

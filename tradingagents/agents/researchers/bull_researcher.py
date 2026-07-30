@@ -1,6 +1,7 @@
 from tradingagents.agents.utils.agent_utils import (
     get_instrument_context_from_state,
     get_language_instruction,
+    sanitize_report_text,
 )
 
 
@@ -42,11 +43,13 @@ Latest world affairs news: {news_report}
 Conversation history of the debate: {history}
 Last bear argument: {current_response}
 Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position.
+
+OUTPUT FORMAT: Write conversationally as if speaking in a debate. DO NOT output JSON, Python dicts, or code blocks — plain prose only.
 """ + get_language_instruction()
 
         response = llm.invoke(prompt)
 
-        argument = f"Bull Analyst: {response.content}"
+        argument = f"Bull Analyst: {sanitize_report_text(response.content)}"
 
         new_investment_debate_state = {
             "history": history + "\n" + argument,

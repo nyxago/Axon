@@ -5,6 +5,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_instrument_context_from_state,
     get_language_instruction,
     get_stock_data,
+    sanitize_report_text,
 )
 
 
@@ -65,7 +66,10 @@ Write a very detailed and nuanced report of the trends you observe. Provide spec
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
                     " You have access to the following tools: {tool_names}."
                     " Today's date is {current_date}; treat it as 'now' for all analysis and tool-call date ranges. {instrument_context}\n"
-                    "{system_message}",
+                    "{system_message}"
+                    "\n\nOUTPUT FORMAT: Write your final report as prose with markdown "
+                    "(headings, tables, bullet lists). DO NOT output raw JSON, Python "
+                    "dicts, or code fences. This goes directly to traders.",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
@@ -83,7 +87,7 @@ Write a very detailed and nuanced report of the trends you observe. Provide spec
         report = ""
 
         if len(result.tool_calls) == 0:
-            report = result.content
+            report = sanitize_report_text(result.content)
 
         return {
             "messages": [result],

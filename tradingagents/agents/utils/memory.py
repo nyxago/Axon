@@ -42,9 +42,12 @@ class TradingMemoryLog:
             for line in raw.splitlines():
                 if line.startswith(f"[{trade_date} | {ticker} |") and line.endswith("| pending]"):
                     return
-        rating = parse_rating(final_trade_decision)
+        from tradingagents.agents.utils.agent_utils import sanitize_report_text
+
+        clean_decision = sanitize_report_text(final_trade_decision)
+        rating = parse_rating(clean_decision)
         tag = f"[{trade_date} | {ticker} | {rating} | pending]"
-        entry = f"{tag}\n\nDECISION:\n{final_trade_decision}{self._SEPARATOR}"
+        entry = f"{tag}\n\nDECISION:\n{clean_decision}{self._SEPARATOR}"
         with open(self._log_path, "a", encoding="utf-8") as f:
             f.write(entry)
 

@@ -549,6 +549,12 @@ class TradingAgentsGraph:
                 yield {"event": "heartbeat"}
 
     @staticmethod
+    def _sanitize_report(text: str) -> str:
+        """Delegate to the shared sanitizer in agent_utils."""
+        from tradingagents.agents.utils.agent_utils import sanitize_report_text
+        return sanitize_report_text(text)
+
+    @staticmethod
     def _extract_event(chunk: dict, seen_reports: set | None = None) -> dict | None:
         """从 LangGraph chunk 提取结构化事件。返回 None 表示跳过。
 
@@ -576,13 +582,17 @@ class TradingAgentsGraph:
         for key, agent_name in report_keys:
             if chunk.get(key) and key not in seen_reports:
                 seen_reports.add(key)
+                report_text = TradingAgentsGraph._sanitize_report(chunk[key])
                 return {
                     "event": "agent_done",
                     "agent": agent_name,
-                    "report": chunk[key],
+                    "report": report_text,
                 }
 
         if content and isinstance(content, str) and len(content) > 20:
+            content = TradingAgentsGraph._sanitize_report(content)
+            if not content or len(content) < 10:
+                return None
             if "FINAL TRANSACTION PROPOSAL" in content:
                 return {
                     "event": "agent_done",

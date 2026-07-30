@@ -9,6 +9,8 @@ run produces the same on-disk report tree a CLI run does.
 from datetime import datetime
 from pathlib import Path
 
+from tradingagents.agents.utils.agent_utils import sanitize_report_text
+
 
 def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
     """Save a completed run's reports to ``save_path``; return the complete-report path."""
@@ -21,20 +23,24 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
     analyst_parts = []
     if final_state.get("market_report"):
         analysts_dir.mkdir(exist_ok=True)
-        (analysts_dir / "market.md").write_text(final_state["market_report"], encoding="utf-8")
-        analyst_parts.append(("Market Analyst", final_state["market_report"]))
+        clean = sanitize_report_text(final_state["market_report"])
+        (analysts_dir / "market.md").write_text(clean, encoding="utf-8")
+        analyst_parts.append(("Market Analyst", clean))
     if final_state.get("sentiment_report"):
         analysts_dir.mkdir(exist_ok=True)
-        (analysts_dir / "sentiment.md").write_text(final_state["sentiment_report"], encoding="utf-8")
-        analyst_parts.append(("Sentiment Analyst", final_state["sentiment_report"]))
+        clean = sanitize_report_text(final_state["sentiment_report"])
+        (analysts_dir / "sentiment.md").write_text(clean, encoding="utf-8")
+        analyst_parts.append(("Sentiment Analyst", clean))
     if final_state.get("news_report"):
         analysts_dir.mkdir(exist_ok=True)
-        (analysts_dir / "news.md").write_text(final_state["news_report"], encoding="utf-8")
-        analyst_parts.append(("News Analyst", final_state["news_report"]))
+        clean = sanitize_report_text(final_state["news_report"])
+        (analysts_dir / "news.md").write_text(clean, encoding="utf-8")
+        analyst_parts.append(("News Analyst", clean))
     if final_state.get("fundamentals_report"):
         analysts_dir.mkdir(exist_ok=True)
-        (analysts_dir / "fundamentals.md").write_text(final_state["fundamentals_report"], encoding="utf-8")
-        analyst_parts.append(("Fundamentals Analyst", final_state["fundamentals_report"]))
+        clean = sanitize_report_text(final_state["fundamentals_report"])
+        (analysts_dir / "fundamentals.md").write_text(clean, encoding="utf-8")
+        analyst_parts.append(("Fundamentals Analyst", clean))
     if analyst_parts:
         content = "\n\n".join(f"### {name}\n{text}" for name, text in analyst_parts)
         sections.append(f"## I. Analyst Team Reports\n\n{content}")
@@ -46,16 +52,19 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
         research_parts = []
         if debate.get("bull_history"):
             research_dir.mkdir(exist_ok=True)
-            (research_dir / "bull.md").write_text(debate["bull_history"], encoding="utf-8")
-            research_parts.append(("Bull Researcher", debate["bull_history"]))
+            clean = sanitize_report_text(debate["bull_history"])
+            (research_dir / "bull.md").write_text(clean, encoding="utf-8")
+            research_parts.append(("Bull Researcher", clean))
         if debate.get("bear_history"):
             research_dir.mkdir(exist_ok=True)
-            (research_dir / "bear.md").write_text(debate["bear_history"], encoding="utf-8")
-            research_parts.append(("Bear Researcher", debate["bear_history"]))
+            clean = sanitize_report_text(debate["bear_history"])
+            (research_dir / "bear.md").write_text(clean, encoding="utf-8")
+            research_parts.append(("Bear Researcher", clean))
         if debate.get("judge_decision"):
             research_dir.mkdir(exist_ok=True)
-            (research_dir / "manager.md").write_text(debate["judge_decision"], encoding="utf-8")
-            research_parts.append(("Research Manager", debate["judge_decision"]))
+            clean = sanitize_report_text(debate["judge_decision"])
+            (research_dir / "manager.md").write_text(clean, encoding="utf-8")
+            research_parts.append(("Research Manager", clean))
         if research_parts:
             content = "\n\n".join(f"### {name}\n{text}" for name, text in research_parts)
             sections.append(f"## II. Research Team Decision\n\n{content}")
@@ -64,8 +73,9 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
     if final_state.get("trader_investment_plan"):
         trading_dir = save_path / "3_trading"
         trading_dir.mkdir(exist_ok=True)
-        (trading_dir / "trader.md").write_text(final_state["trader_investment_plan"], encoding="utf-8")
-        sections.append(f"## III. Trading Team Plan\n\n### Trader\n{final_state['trader_investment_plan']}")
+        clean_trader = sanitize_report_text(final_state["trader_investment_plan"])
+        (trading_dir / "trader.md").write_text(clean_trader, encoding="utf-8")
+        sections.append(f"## III. Trading Team Plan\n\n### Trader\n{clean_trader}")
 
     # 4. Risk Management
     if final_state.get("risk_debate_state"):
@@ -74,16 +84,19 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
         risk_parts = []
         if risk.get("aggressive_history"):
             risk_dir.mkdir(exist_ok=True)
-            (risk_dir / "aggressive.md").write_text(risk["aggressive_history"], encoding="utf-8")
-            risk_parts.append(("Aggressive Analyst", risk["aggressive_history"]))
+            clean = sanitize_report_text(risk["aggressive_history"])
+            (risk_dir / "aggressive.md").write_text(clean, encoding="utf-8")
+            risk_parts.append(("Aggressive Analyst", clean))
         if risk.get("conservative_history"):
             risk_dir.mkdir(exist_ok=True)
-            (risk_dir / "conservative.md").write_text(risk["conservative_history"], encoding="utf-8")
-            risk_parts.append(("Conservative Analyst", risk["conservative_history"]))
+            clean = sanitize_report_text(risk["conservative_history"])
+            (risk_dir / "conservative.md").write_text(clean, encoding="utf-8")
+            risk_parts.append(("Conservative Analyst", clean))
         if risk.get("neutral_history"):
             risk_dir.mkdir(exist_ok=True)
-            (risk_dir / "neutral.md").write_text(risk["neutral_history"], encoding="utf-8")
-            risk_parts.append(("Neutral Analyst", risk["neutral_history"]))
+            clean = sanitize_report_text(risk["neutral_history"])
+            (risk_dir / "neutral.md").write_text(clean, encoding="utf-8")
+            risk_parts.append(("Neutral Analyst", clean))
         if risk_parts:
             content = "\n\n".join(f"### {name}\n{text}" for name, text in risk_parts)
             sections.append(f"## IV. Risk Management Team Decision\n\n{content}")
@@ -92,8 +105,9 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
         if risk.get("judge_decision"):
             portfolio_dir = save_path / "5_portfolio"
             portfolio_dir.mkdir(exist_ok=True)
-            (portfolio_dir / "decision.md").write_text(risk["judge_decision"], encoding="utf-8")
-            sections.append(f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{risk['judge_decision']}")
+            clean = sanitize_report_text(risk["judge_decision"])
+            (portfolio_dir / "decision.md").write_text(clean, encoding="utf-8")
+            sections.append(f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{clean}")
 
     # Write consolidated report
     header = f"# Trading Analysis Report: {ticker}\n\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
